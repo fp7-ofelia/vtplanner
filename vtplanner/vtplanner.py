@@ -18,6 +18,14 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>
 
+__appname__ = 'vtplanner'
+__version__ = "1.0.0"
+__author__ = "Roberto Riggio <roberto.riggio@create-net.org>"
+__licence__ = "LGPL"
+
+# Libraries
+#==========
+
 import optparse
 
 from vtplanner.backends.fvctl import import_vnrequest
