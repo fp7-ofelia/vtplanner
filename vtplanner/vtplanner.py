@@ -28,9 +28,9 @@ __licence__ = "LGPL"
 
 import optparse
 
-from vtplanner.backends.fvctl import import_vnrequest
-from vtplanner.backends.fvctl import import_substrate
-from vtplanner.backends.fvctl import create_slice
+from backends.fvctl import import_vnrequest
+from backends.fvctl import import_substrate
+from backends.fvctl import create_slice
 
 def main():
 

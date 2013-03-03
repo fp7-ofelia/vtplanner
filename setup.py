@@ -16,6 +16,6 @@ setup(
     license="LGPL",
     keywords="cli curses monitoring system",
     long_description=open('README').read(),
-    packages=['vtplanner'],
+    packages=['vtplanner', 'vtplanner.backends', 'vtplanner.embedding'],
     entry_points={"console_scripts": ["vtplanner=vtplanner.vtplanner:main"]},
 )
