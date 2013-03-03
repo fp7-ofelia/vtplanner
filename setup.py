@@ -17,4 +17,5 @@ setup(
     keywords="cli curses monitoring system",
     long_description=open('README').read(),
     packages=['vtplanner'],
+    entry_points={"console_scripts": ["vtplanner=vtplanner.vtplanner:main"]},
 )

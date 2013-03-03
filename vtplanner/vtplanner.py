@@ -1,24 +1,35 @@
 #!/usr/bin/env python
-
-'''
-Created on Jan 29, 2013
-
-@author: rriggio
-'''
+# -*- coding: utf-8 -*-
+#
+# VTPlanner OFELIA OCF module
+#
+# Copyright (C) 2013 Roberto Riggio <roberto.riggio@create-net.org>
+#
+# VTPlanner is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# VTPlanner is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>
 
 import optparse
 
-from backends.fvctl import import_vnrequest
-from backends.fvctl import import_substrate
-from backends.fvctl import create_slice
+from vtplanner.backends.fvctl import import_vnrequest
+from vtplanner.backends.fvctl import import_substrate
+from vtplanner.backends.fvctl import create_slice
 
-if __name__ == "__main__":
-    
+def main():
+
     p = optparse.OptionParser()
     p.add_option("-a", "--algorithm", dest="algorithm", default="vtplanner")
     p.add_option('-d', '--dryrun', action="store_true", dest="dryrun", default=False)    
     p.add_option('-r', '--request', dest="request", default='request.xml')
-    p.add_option("-f", "--passwd-file", dest="passwdfile", default="passwd")
     p.add_option("-p", "--port", dest="port", type="int", default="8080")
     p.add_option("-u", "--user", dest="user", default="fvadmin")
     p.add_option("-n", "--name", dest="host", default="localhost")
@@ -40,3 +51,7 @@ if __name__ == "__main__":
     # create_slice
     if success and not options.dryrun:
         create_slice(virt_devices, virt_links, options)
+
+if __name__ == "__main__":
+    main()
+
