@@ -75,10 +75,9 @@ def run_process(exe):
         if(retcode is not None):
             break
 
-def fvctl(options, cmds):
-    return [ 'fvctl', 
+def vectl(options, cmds):
+    return [ 'vectl', 
             '--user=%s' % options.user, 
-            '--passwd-file=%s' % options.passwdfile, 
             '--url=https://%s:%d/xmlrpc' % (options.host, options.port) ] + cmds
 
 def import_vnrequest(options):
@@ -113,7 +112,7 @@ def import_substrate(options):
     # list substrate devices
     print "Loading substrate devices"
     sub_devices = {}
-    for line in run_process(fvctl(options, ['listDevices'])):
+    for line in run_process(vectl(options, ['listDevices'])):
         match = re.search("^Device (.*): (.*).*", line)
         if match:
             sub_devices[match.group(1)] = { 'DPID' : match.group(2), 'type' : 'switch' }
@@ -124,7 +123,7 @@ def import_substrate(options):
     # list substrate links
     print "Loading substrate links"
     sub_links = {}
-    for line in run_process(fvctl(options, ['getLinks'])):
+    for line in run_process(vectl(options, ['getLinks'])):
         match = re.search("^Link (.*): Link\[srcDPID=(.*),srcPort=(.*),dstDPID=(.*),dstPort=(.*)\].*", line)
         if match:
             sub_links[match.group(1)] = { 'srcDPID' : match.group(2),
@@ -139,7 +138,7 @@ def import_substrate(options):
     print "Loading port info"
     for device in sub_devices:
         DPID = sub_devices[device]['DPID']
-        for line in run_process(fvctl(options, [ 'getDeviceInfo', DPID] )):
+        for line in run_process(vectl(options, [ 'getDeviceInfo', DPID] )):
             match = re.search("^portList=(.*)", line)
             if match:
                 ports = match.group(1).split(',')
@@ -160,7 +159,7 @@ def import_substrate(options):
         sub_links[link]['src'] = resolve_by_dpid(sub_devices, srcDPID)
         sub_links[link]['dst'] = resolve_by_dpid(sub_devices, dstDPID)
 
-        for line in run_process(fvctl(options, [ 'getVTPlannerPortInfo', srcDPID, srcPort] )):
+        for line in run_process(vectl(options, [ 'getVTPlannerPortInfo', srcDPID, srcPort] )):
             match = re.search("^(.*)\s*0x(.*)\s*0x(.*)\s*0x(.*)\n", line)
             if match:
                 features = hex(int(match.group(3),16));
@@ -194,14 +193,14 @@ def create_slice(virt_devices, virt_links, options):
             url,
             email ]
     
-    retcode = subprocess.call(fvctl(options, cmds))
+    retcode = subprocess.call(vectl(options, cmds))
     
     if retcode != 0:
         raise Exception("Unable to create slice")
     
     cmds = [ 'addFlowSpace', 'all', '2', 'any', 'Slice:%s=4' % name ] 
     
-    retcode = subprocess.call(fvctl(options, cmds))
+    retcode = subprocess.call(vectl(options, cmds))
 
     if retcode != 0:
         raise Exception("Unable to add flowspace")
@@ -213,7 +212,7 @@ def create_slice(virt_devices, virt_links, options):
                 vpath = vpath + ","
             vpath = vpath + "%s/%s-%s/%s" % tuple(hop) 
         cmds = [ 'addLink', name, vpath ]
-        retcode = subprocess.call(fvctl(options, cmds))
+        retcode = subprocess.call(vectl(options, cmds))
         if retcode != 0:
             raise Exception("Unable to create link (%s)" % vpath)
         else:
