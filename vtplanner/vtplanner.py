@@ -34,9 +34,9 @@ def main():
     p.add_option("-u", "--user", dest="user", default="fvadmin")
     p.add_option("-n", "--name", dest="host", default="localhost")
     p.add_option("-m", "--mcr", dest="mcr", default="/usr/local/MATLAB/MATLAB_Compiler_Runtime/v717")
-    options, arguments = p.parse_args()
+    options, _ = p.parse_args()
 
-    embedding = __import__("embedding.%s" % options.algorithm, fromlist=["embedding"])
+    embedding = __import__("vtplanner.embedding.%s" % options.algorithm, fromlist=["embedding"])
 
     # load vn request
     ( virt_devices, virt_links ) = import_vnrequest(options)
