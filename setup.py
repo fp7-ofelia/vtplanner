@@ -15,7 +15,7 @@ setup(
     author_email='Roberto Riggio',
     license="LGPL",
     keywords="cli curses monitoring system",
-    long_description=open('README').read(),
+    long_description=open('README.md').read(),
     packages=['vtplanner', 'vtplanner.backends', 'vtplanner.embedding'],
     entry_points={"console_scripts": ["vtplanner=vtplanner.vtplanner:main"]},
 )
