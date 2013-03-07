@@ -78,6 +78,7 @@ def run_process(exe):
 def vectl(options, cmds):
     return [ 'vectl', 
             '--user=%s' % options.user, 
+            '--passwd-file=%s' % options.passwd_file, 
             '--url=https://%s:%d/xmlrpc' % (options.host, options.port) ] + cmds
 
 def import_vnrequest(options):

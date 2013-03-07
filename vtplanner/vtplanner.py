@@ -31,6 +31,7 @@ def main():
     p.add_option('-d', '--dryrun', action="store_true", dest="dryrun", default=False)    
     p.add_option('-r', '--request', dest="request", default='request.xml')
     p.add_option("-p", "--port", dest="port", type="int", default="8080")
+    p.add_option("-f", "--passwd-file", dest="port", default="passwd_file")
     p.add_option("-u", "--user", dest="user", default="fvadmin")
     p.add_option("-n", "--name", dest="host", default="localhost")
     p.add_option("-m", "--mcr", dest="mcr", default="/usr/local/MATLAB/MATLAB_Compiler_Runtime/v717")
