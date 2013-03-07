@@ -1,9 +1,5 @@
 #!/usr/bin/env python
 
-import os
-import sys
-import glob
-
 from setuptools import setup
 
 setup(
@@ -16,6 +12,7 @@ setup(
     license="LGPL",
     keywords="cli curses monitoring system",
     long_description=open('README.md').read(),
+    scripts=[ 'vtplanner/embedding/vtplanner_standalone', 'vtplanner/embedding/run_vtplanner_standalone.sh' ],
     packages=['vtplanner', 'vtplanner.backends', 'vtplanner.embedding'],
     entry_points={"console_scripts": ["vtplanner=vtplanner.vtplanner:main"]},
 )

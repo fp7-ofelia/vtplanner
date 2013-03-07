@@ -21,7 +21,7 @@ INPUT_VIRTUAL = "/tmp/vtplanner_input_virtual.mat"
 OUTPUT = "/tmp/vtplanner_output.mat"
 
 def run_process(exe):    
-    p = subprocess.Popen(exe, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd='./algorithms/')
+    p = subprocess.Popen(exe, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     while(True):
         retcode = p.poll() #returns None while subprocess is running
         line = p.stdout.readline()
@@ -99,7 +99,7 @@ def compute_embedding(sub_devices, sub_links, virt_devices, virt_links, params):
     if os.path.isfile(OUTPUT):
         os.remove(OUTPUT)
         
-    cmds = ['./run_vtplanner_standalone.sh', 
+    cmds = ['run_vtplanner_standalone.sh', 
             params['mcr'], 
             str(params['alpha']), 
             INPUT_VIRTUAL, 
