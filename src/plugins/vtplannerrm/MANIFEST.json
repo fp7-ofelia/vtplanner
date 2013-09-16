@@ -1,0 +1,9 @@
+{
+  "name" : "VTPlanner resource manager",
+  "author" : "Roberto Riggio",
+  "author-email" : "roberto.riggio@create-net.org",
+  "version" : 1,
+  "implements" : ["vtplannerresourcemanager", "vtplannerexceptions"],
+  "loads-after" : ["config", "worker"],
+  "requires" : []
+}

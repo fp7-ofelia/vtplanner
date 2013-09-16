@@ -1,0 +1,9 @@
+{
+  "name" : "VTPlanner delegate for GENI AM API v3",
+  "author" : "Roberto Riggio",
+  "author-email" : "roberto.riggio@create-net.org",
+  "version" : 1,
+  "implements" : [],
+  "loads-after" : ["geniv3handler", "geniv3delegatebase", "geniv3exceptions", "vtplannerresourcemanager", "vtplannerexceptions", "config"],
+  "requires" : []
+}
