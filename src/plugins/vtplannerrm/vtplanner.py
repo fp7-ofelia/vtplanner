@@ -45,8 +45,7 @@ def write_substrate_mat(sub_devices, sub_links):
         
     for device in sub_devices:
         if sub_devices[device]['type'] == "vm":
-            metric = sub_devices[device]['cpu_frequency'] * sub_devices[device]['cpus_number']
-            Csubstrate[device] = metric
+            Csubstrate[device] = sub_devices[device]['memory_mb']
 
     for link in sub_links:
         srcId = int(sub_links[link]['src'])
@@ -76,9 +75,8 @@ def write_vnrequest_mat(virt_devices, virt_links):
 
     for device in virt_devices:
         if virt_devices[device]['type'] == "vm":
-            metric = virt_devices[device]['cpu_frequency'] * virt_devices[device]['cpus_number']
-            Cvirtual[device] = metric
-        
+            Cvirtual[device] = virt_devices[device]['memory_mb']
+
     for link in virt_links:
         
         srcId = int(virt_links[link]['src'])

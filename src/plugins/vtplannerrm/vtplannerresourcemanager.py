@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 
+import os
+import subprocess
 import amsoil.core.pluginmanager as pm
 import amsoil.core.log
 import re
@@ -14,66 +16,9 @@ from geni_am_api_two_client import GENI2Client
 from lxml import etree
 from lxml.builder import E
 from lxml.etree import tostring
+from uuid import uuid1
 
 worker = pm.getService('worker')
-
-VTAM_SAMPLE="""<?xml version="1.0" encoding="UTF-8"?>
-<rspec>
- <network name="ocf.i2cat.vt_manager">
-
-    <node component_manager_id="urn:publicid:IDN+ocf:i2cat:vt_manager+authority+sa" component_id="urn:publicid:IDN+ocf:i2cat:vt_manager+node+foix" exclusive="false" component_name="urn:publicid:IDN+ocf:i2cat:vt_manager+node+foix">
-
-      <hostname>foix.ctx.i2cat.net</hostname>
-      <name>foix</name>
-      <operating_system_type>GNU/Linux</operating_system_type>
-      <operating_system_distribution>Debian</operating_system_distribution>
-      <operating_system_version>6.0</operating_system_version>
-      <virtualization_technology>xen</virtualization_technology>
-      <cpus_number>8</cpus_number>
-      <cpu_frequency>2500</cpu_frequency>
-      <memory>900</memory>
-      <hdd_space_GB>5000.0</hdd_space_GB>
-      <agent_url>https://84.88.40.12:9229/</agent_url>
-      <service type="Range">
-        <type>IP_Range</type>
-        <name>Range prueba</name>
-        <start_value>10.0.0.1</start_value>
-        <end_value>10.0.0.100</end_value>
-      </service>
-      <service type="Range">
-        <type>IP_Range</type>
-        <name>prueba 2</name>
-        <start_value>10.0.0.200</start_value>
-        <end_value>10.0.0.254</end_value>
-      </service>
-      <service type="Range">
-        <type>MAC_Range</type>
-        <name>prueba</name>
-        <start_value>02:03:FF:FF:FF:00</start_value>
-        <end_value>02:03:FF:FF:FF:FF</end_value>
-      </service>
-      <service type="NetworkInterface">
-        <from_server_interface_name>eth1.999</from_server_interface_name>
-        <to_network_interface_id>OFSwitch001</to_network_interface_id>
-        <to_network_interface_port>2</to_network_interface_port>
-      </service>
-      <service type="NetworkInterface">
-        <from_server_interface_name>eth2</from_server_interface_name>
-        <to_network_interface_id>lak</to_network_interface_id>
-        <to_network_interface_port>5</to_network_interface_port>
-      </service>
-      <service type="NetworkInterface">
-        <from_server_interface_name>eth3</from_server_interface_name>
-        <to_network_interface_id>02:08:02:08:00:00:00:07</to_network_interface_id>
-        <to_network_interface_port>14</to_network_interface_port>
-      </service>
-    </node>
-
- </network>
-
-</rspec>
-
-"""
 
 CREDS='<?xml version="1.0"?>\n<signed-credential xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.planet-lab.org/resources/sfa/credential.xsd" xsi:schemaLocation="http://www.planet-lab.org/resources/sfa/ext/policy/1 http://www.planet-lab.org/resources/sfa/ext/policy/1/policy.xsd"><credential xml:id="ref0"><type>privilege</type><serial>8</serial><owner_gid>-----BEGIN CERTIFICATE-----\nMIICNDCCAZ2gAwIBAgIBAzANBgkqhkiG9w0BAQQFADAmMSQwIgYDVQQDExtnZW5p\nLy9ncG8vL2djZi5hdXRob3JpdHkuc2EwHhcNMTMwNjE4MDc1NDQ1WhcNMTgwNjE3\nMDc1NDQ1WjAkMSIwIAYDVQQDExlnZW5pLy9ncG8vL2djZi51c2VyLmFsaWNlMIGf\nMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCmS8GZ6qy4TKh7CTSKvMIAlLqCG0uG\nbZEqfLZdSqhe21c+mxQ+V3dgmCSwi6noWg2pJkkcFn1YKvIy9XUZ3IwNfE9QIVlK\n0Eh453+jqOAc9jc6KrXpPMTkicmGVpAac4X/Ao6fuZMHZ81tjVgeJ8xxYpU6Qjz0\npKjTr8D9lCR2IQIDAQABo3QwcjAMBgNVHRMBAf8EAjAAMGIGA1UdEQRbMFmGKHVy\nbjpwdWJsaWNpZDpJRE4rZ2VuaTpncG86Z2NmK3VzZXIrYWxpY2WGLXVybjp1dWlk\nOjViYzNiZWY3LTM4NDktNDEzMS1iNDczLTU2MzNiMzA1MzQ3MTANBgkqhkiG9w0B\nAQQFAAOBgQBkMVA+I6oEpU4afFY0xE3cwi93Cyt6dt/p8B2zZ9dzs5vAXx6PaGMb\n5k5+LjtoUGQ/XMOPdX0TuPhhJLOV9mYP5Xm+4dr8RYTGO3bVdnh60XHWBqZtsdOj\nIOvLkSVYqouUyyEeEPNm4dukk4BHGzisTqwrglkcYQtDWPmglxKs+A==\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nMIICOzCCAaSgAwIBAgIBAzANBgkqhkiG9w0BAQQFADAmMSQwIgYDVQQDExtnZW5p\nLy9ncG8vL2djZi5hdXRob3JpdHkuc2EwHhcNMTMwNjE4MDc1NDQ0WhcNMTgwNjE3\nMDc1NDQ0WjAmMSQwIgYDVQQDExtnZW5pLy9ncG8vL2djZi5hdXRob3JpdHkuc2Ew\ngZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAN2D/6XFhkK6NwYg0nF60AU380ej\n35LmzVYJuJDyh0qlusvSaJkuv3LLHtzZ/sG6ZyitwqPyiHwPL9KgsfBvqYs/5hsi\n7qzV8M6YbcOwpNAWiSqbtmnEkzbkvzG+dwWwsS37dC6rp5cj9v7k5bj+FwdgIWNy\nhN5JhC1ROJg5w89ZAgMBAAGjeTB3MA8GA1UdEwEB/wQFMAMBAf8wZAYDVR0RBF0w\nW4YqdXJuOnB1YmxpY2lkOklETitnZW5pOmdwbzpnY2YrYXV0aG9yaXR5K3Nhhi11\ncm46dXVpZDpkMDc2MWQ1OS0zNzA2LTQxMWItOTRkMy02YTUxZjZiZGI5ODUwDQYJ\nKoZIhvcNAQEEBQADgYEALQqBOipQncjxdCrsc/WZzjgjgs1htCOCi0BiwJfXE/44\naW6P/a93zpzgOkD6YXkaFLjjTJ/RZ+mVM+MIH3R4xw+8lUXMKfsj549WKa4H90N7\nQTKOBN7oVhHQOfd9E2llVzt326OtbXapnReASuKVNvzM3Dlxe4IkD1n9H91s1+M=\n-----END CERTIFICATE-----\n</owner_gid><owner_urn>urn:publicid:IDN+geni:gpo:gcf+user+alice</owner_urn><target_gid>-----BEGIN CERTIFICATE-----\nMIICNDCCAZ2gAwIBAgIBAzANBgkqhkiG9w0BAQQFADAmMSQwIgYDVQQDExtnZW5p\nLy9ncG8vL2djZi5hdXRob3JpdHkuc2EwHhcNMTMwNjE4MDc1NDQ1WhcNMTgwNjE3\nMDc1NDQ1WjAkMSIwIAYDVQQDExlnZW5pLy9ncG8vL2djZi51c2VyLmFsaWNlMIGf\nMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCmS8GZ6qy4TKh7CTSKvMIAlLqCG0uG\nbZEqfLZdSqhe21c+mxQ+V3dgmCSwi6noWg2pJkkcFn1YKvIy9XUZ3IwNfE9QIVlK\n0Eh453+jqOAc9jc6KrXpPMTkicmGVpAac4X/Ao6fuZMHZ81tjVgeJ8xxYpU6Qjz0\npKjTr8D9lCR2IQIDAQABo3QwcjAMBgNVHRMBAf8EAjAAMGIGA1UdEQRbMFmGKHVy\nbjpwdWJsaWNpZDpJRE4rZ2VuaTpncG86Z2NmK3VzZXIrYWxpY2WGLXVybjp1dWlk\nOjViYzNiZWY3LTM4NDktNDEzMS1iNDczLTU2MzNiMzA1MzQ3MTANBgkqhkiG9w0B\nAQQFAAOBgQBkMVA+I6oEpU4afFY0xE3cwi93Cyt6dt/p8B2zZ9dzs5vAXx6PaGMb\n5k5+LjtoUGQ/XMOPdX0TuPhhJLOV9mYP5Xm+4dr8RYTGO3bVdnh60XHWBqZtsdOj\nIOvLkSVYqouUyyEeEPNm4dukk4BHGzisTqwrglkcYQtDWPmglxKs+A==\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nMIICOzCCAaSgAwIBAgIBAzANBgkqhkiG9w0BAQQFADAmMSQwIgYDVQQDExtnZW5p\nLy9ncG8vL2djZi5hdXRob3JpdHkuc2EwHhcNMTMwNjE4MDc1NDQ0WhcNMTgwNjE3\nMDc1NDQ0WjAmMSQwIgYDVQQDExtnZW5pLy9ncG8vL2djZi5hdXRob3JpdHkuc2Ew\ngZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAN2D/6XFhkK6NwYg0nF60AU380ej\n35LmzVYJuJDyh0qlusvSaJkuv3LLHtzZ/sG6ZyitwqPyiHwPL9KgsfBvqYs/5hsi\n7qzV8M6YbcOwpNAWiSqbtmnEkzbkvzG+dwWwsS37dC6rp5cj9v7k5bj+FwdgIWNy\nhN5JhC1ROJg5w89ZAgMBAAGjeTB3MA8GA1UdEwEB/wQFMAMBAf8wZAYDVR0RBF0w\nW4YqdXJuOnB1YmxpY2lkOklETitnZW5pOmdwbzpnY2YrYXV0aG9yaXR5K3Nhhi11\ncm46dXVpZDpkMDc2MWQ1OS0zNzA2LTQxMWItOTRkMy02YTUxZjZiZGI5ODUwDQYJ\nKoZIhvcNAQEEBQADgYEALQqBOipQncjxdCrsc/WZzjgjgs1htCOCi0BiwJfXE/44\naW6P/a93zpzgOkD6YXkaFLjjTJ/RZ+mVM+MIH3R4xw+8lUXMKfsj549WKa4H90N7\nQTKOBN7oVhHQOfd9E2llVzt326OtbXapnReASuKVNvzM3Dlxe4IkD1n9H91s1+M=\n-----END CERTIFICATE-----\n</target_gid><target_urn>urn:publicid:IDN+geni:gpo:gcf+user+alice</target_urn><uuid/><expires>2013-06-25T14:41:16</expires><privileges><privilege><name>refresh</name><can_delegate>false</can_delegate></privilege><privilege><name>resolve</name><can_delegate>false</can_delegate></privilege><privilege><name>info</name><can_delegate>false</can_delegate></privilege></privileges></credential><signatures><Signature xmlns="http://www.w3.org/2000/09/xmldsig#" xml:id="Sig_ref0">\n  <SignedInfo>\n    <CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>\n    <SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>\n    <Reference URI="#ref0">\n      <Transforms>\n        <Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>\n      </Transforms>\n      <DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>\n      <DigestValue>iXeob2JH0oDIyI3K8HkAZWNjoiQ=</DigestValue>\n    </Reference>\n  </SignedInfo>\n  <SignatureValue>eTk5lAT+bjnUnb6N9iZzmUlcCmgAQ9TFoBAhUlOxTse5G70VkUZpRmpq2MSu5+tg\nJyH8kY6i8G3QRU+WkR2zU+Q/NuFLw492SymIZ3DPR2CzfjL5u7l3NBYSmlvgP8b7\n3koz3Uv7huPj/oWPwDbT5erttWgk0gMrB2qryJ6Xbso=</SignatureValue>\n  <KeyInfo>\n    <X509Data>\n<X509Certificate>MIICOzCCAaSgAwIBAgIBAzANBgkqhkiG9w0BAQQFADAmMSQwIgYDVQQDExtnZW5p\nLy9ncG8vL2djZi5hdXRob3JpdHkuc2EwHhcNMTMwNjE4MDc1NDQ0WhcNMTgwNjE3\nMDc1NDQ0WjAmMSQwIgYDVQQDExtnZW5pLy9ncG8vL2djZi5hdXRob3JpdHkuc2Ew\ngZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAN2D/6XFhkK6NwYg0nF60AU380ej\n35LmzVYJuJDyh0qlusvSaJkuv3LLHtzZ/sG6ZyitwqPyiHwPL9KgsfBvqYs/5hsi\n7qzV8M6YbcOwpNAWiSqbtmnEkzbkvzG+dwWwsS37dC6rp5cj9v7k5bj+FwdgIWNy\nhN5JhC1ROJg5w89ZAgMBAAGjeTB3MA8GA1UdEwEB/wQFMAMBAf8wZAYDVR0RBF0w\nW4YqdXJuOnB1YmxpY2lkOklETitnZW5pOmdwbzpnY2YrYXV0aG9yaXR5K3Nhhi11\ncm46dXVpZDpkMDc2MWQ1OS0zNzA2LTQxMWItOTRkMy02YTUxZjZiZGI5ODUwDQYJ\nKoZIhvcNAQEEBQADgYEALQqBOipQncjxdCrsc/WZzjgjgs1htCOCi0BiwJfXE/44\naW6P/a93zpzgOkD6YXkaFLjjTJ/RZ+mVM+MIH3R4xw+8lUXMKfsj549WKa4H90N7\nQTKOBN7oVhHQOfd9E2llVzt326OtbXapnReASuKVNvzM3Dlxe4IkD1n9H91s1+M=</X509Certificate>\n<X509SubjectName>CN=geni//gpo//gcf.authority.sa</X509SubjectName>\n<X509IssuerSerial>\n<X509IssuerName>CN=geni//gpo//gcf.authority.sa</X509IssuerName>\n<X509SerialNumber>3</X509SerialNumber>\n</X509IssuerSerial>\n</X509Data>\n    <KeyValue>\n<RSAKeyValue>\n<Modulus>\n3YP/pcWGQro3BiDScXrQBTfzR6PfkubNVgm4kPKHSqW6y9JomS6/csse3Nn+wbpn\nKK3Co/KIfA8v0qCx8G+piz/mGyLurNXwzphtw7Ck0BaJKpu2acSTNuS/Mb53BbCx\nLft0LqunlyP2/uTluP4XB2AhY3KE3kmELVE4mDnDz1k=\n</Modulus>\n<Exponent>\nAQAB\n</Exponent>\n</RSAKeyValue>\n</KeyValue>\n  </KeyInfo>\n</Signature></signatures></signed-credential>\n'
 
@@ -159,14 +104,29 @@ class VTPlannerResourceManager(object):
 
                 virt_vertices[device_id] = { 'dpid' : item.get('dpid'),
                                              'type' : 'vm', 
-                                             'memory' : int(item.get('memory')),
-                                             'cpu_frequency' : int(item.get('cpu_frequency')),
-                                             'cpus_number' : int(item.get('cpus_number')) }
+                                             'name' : item.get('name'), 
+                                             'project_id' : item.get('project_id'), 
+                                             'project_name' : item.get('project_name'), 
+                                             'slice_id' : item.get('slice_id'), 
+                                             'slice_name' : item.get('slice_name'), 
+                                             'operating_system_type' : item.get('operating_system_type'), 
+                                             'operating_system_version' : item.get('operating_system_version'), 
+                                             'operating_system_distribution' : item.get('operating_system_distribution'), 
+                                             'hd_setup_type' : item.get('hd_setup_type'), 
+                                             'hd_origin_path' : item.get('hd_origin_path'), 
+                                             'virtualization_setup_type' : item.get('virtualization_setup_type'), 
+                                             'memory_mb' : int(item.get('memory_mb')), 
+                                             'name' : item.get('name'), 
+                                             'name' : item.get('name'), 
+                                             'name' : item.get('name'), 
+                                             'name' : item.get('name'), 
+                                             'name' : item.get('name') }
                 device_id = device_id + 1
 
             else:
 
                 virt_vertices[device_id] = { 'dpid' : item.get('dpid'),
+                                             'name' : item.get('name'), 
                                              'type' : 'switch', 
                                              'tablesize' : item.get('tablesize'), 
                                              'switchtype' : item.get('switchtype') }
@@ -206,6 +166,7 @@ class VTPlannerResourceManager(object):
     def import_substrate(self, resources, vtam_resources):
 
         vtam_doc = etree.fromstring(vtam_resources)
+
         doc = etree.fromstring(resources)
 
         # list substrate devices
@@ -261,28 +222,16 @@ class VTPlannerResourceManager(object):
             component_name = node.get("component_name")
 
             try:
-                cpu_frequency = int(node.findall('.//cpu_frequency')[0].text)
+                memory_mb = int(node.findall('.//memory')[0].text)
             except:
-                cpu_frequency = 2500
-
-            try:
-                cpus_number = int(node.findall('.//cpus_number')[0].text)
-            except:
-                cpus_number = 8
-
-            try:
-                memory = int(node.findall('.//memory')[0].text)
-            except:
-                memory = 16384
+                memory_mb = 16384
 
             sub_devices[device_id] = { 'dpid' : component_id, 
                                        'component_id' : component_id, 
                                        'component_manager_id' : component_manager_id,
                                        'component_name' : component_name,
                                        'type' : 'vm', 
-                                       'cpu_frequency' : cpu_frequency,
-                                       'cpus_number' : cpus_number,
-                                       'memory' : memory }
+                                       'memory_mb' : memory_mb }
 
             for iface in node.findall('.//service'):
 
@@ -312,8 +261,8 @@ class VTPlannerResourceManager(object):
 
         return ( sub_devices, sub_links )
 
-    def provision(self, slice_urn, embedding):
-        
+    def provision_foam(self, embedding):
+
 	xmlns="http://www.geni.net/resources/rspec/3"
         xmlns_xs="http://www.w3.org/2001/XMLSchema-instance"
         xmlns_openflow="/opt/foam/schemas"
@@ -368,33 +317,6 @@ class VTPlannerResourceManager(object):
  
             node = embedding.virt_vertices[node_id]
 
-            if node['type'] == 'vm':
-
-                for link in embedding.virt_edges.values():
-
-                    if link['src'] == node_id:
-                        from_server_interface_name=link['hops'][-1][3]
-                        to_network_interface_id=link['hops'][-1][0]
-                        to_network_interface_port=str(link['hops'][-1][1])
-
-                    if link['dst'] == node_id:
-                        from_server_interface_name=link['hops'][0][1]
-                        to_network_interface_id=link['hops'][0][2]
-                        to_network_interface_port=str(link['hops'][0][3])
-
-                nd = etree.SubElement(mygrp, 
-                                      '{%s}vm' % NSMAP['openflow'], 
-                                      nsmap=NSMAP, 
-                                      from_server_interface_name=from_server_interface_name,
-                                      to_network_interface_id=to_network_interface_id,
-                                      to_network_interface_port=to_network_interface_port,
-                                      cpus_number=str(node['cpus_number']),
-                                      cpu_frequency=str(node['cpu_frequency']),
-                                      memory=str(node['memory']),
-                                      component_id=node['component_id'], 
-                                      component_manager_id=node['component_manager_id'], 
-                                      component_name=node['component_name'])
-
             if node['type'] == 'switch':
 
                 nd = etree.SubElement(mygrp, 
@@ -417,11 +339,139 @@ class VTPlannerResourceManager(object):
 
         etree.SubElement(match, '{%s}use-group' % NSMAP['openflow'], nsmap=NSMAP, name='mygrp')
 
-        print tostring(doc, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+	return doc
 
-        raise Exception
+    def provision_vtam(self, embedding):
 
-	# send request
+	# load resouces info
+        # make request to vt-am
+        creds = (self.config.get("vtplannerrm.vtam_username"),
+                 self.config.get("vtplannerrm.vtam_password"),
+                 self.config.get("vtplannerrm.vtam_host"), 
+                 self.config.get("vtplannerrm.vtam_port"))
+        s = xmlrpclib.Server("https://%s:%s@%s:%s/xmlrpc/plugin" % creds)
+        resources = s.listResources("")
+
+	resources_doc = etree.fromstring(resources[1])
+
+	# Create the root element
+        root = etree.Element('rspec')
+
+	# Make a new document tree
+        doc = etree.ElementTree(root)
+
+	query = etree.SubElement(root, 'query')
+
+	provisioning = etree.SubElement(query, 'provisioning')
+
+	action = etree.SubElement(provisioning, 'action', type="create", id=str( uuid1()))
+
+        # add vm
+        for node_id in embedding.virt_vertices:
+ 
+            node = embedding.virt_vertices[node_id]
+
+            if node['type'] == 'vm':
+
+		server_uuid = None
+
+		for server in resources_doc.findall('.//server'):
+			name = server.findall('.//name')[0]
+			uuid = server.findall('.//uuid')[0]
+
+			if name.text == node['component_id'].split('+')[-1]:
+				server_uuid = uuid.text
+				break
+
+		if server_uuid is None:
+			return None
+
+	        vm = etree.SubElement(action, 'vm')
+    	
+	        name = etree.SubElement(vm, 'name') # from ui
+		name.text = node['name']
+
+	        uuid = etree.SubElement(vm, 'uuid')
+		uuid.text = server_uuid
+
+	        project_id = etree.SubElement(vm, 'project-id')  # from ui
+		project_id.text = embedding.virt_vertices[node_id]['project_id']
+
+	        project_name = etree.SubElement(vm, 'project-name')  # from ui
+		project_name.text = embedding.virt_vertices[node_id]['project_name']
+
+	        slice_id = etree.SubElement(vm, 'slice-id')  # from ui
+		slice_id.text = embedding.virt_vertices[node_id]['slice_id']
+
+	        slice_name = etree.SubElement(vm, 'slice-name')  # from ui
+		slice_name.text = embedding.virt_vertices[node_id]['slice_name']
+
+	        operating_system_type = etree.SubElement(vm, 'operating-system-type')  # from ui
+		operating_system_type.text = embedding.virt_vertices[node_id]['operating_system_type']
+
+	        operating_system_version = etree.SubElement(vm, 'operating-system-version')  # from ui
+		operating_system_version.text = embedding.virt_vertices[node_id]['operating_system_version']
+
+	        operating_system_distribution = etree.SubElement(vm, 'operating-system-distribution')  # from ui
+		operating_system_distribution.text = embedding.virt_vertices[node_id]['operating_system_distribution']
+
+	        server_id = etree.SubElement(vm, 'server-id') # from previous allocate call
+		server_id.text = server_uuid
+
+	        virtualization_type = etree.SubElement(vm, 'virtualization-type')  
+		virtualization_type.text = "xen"
+
+	        xen_configuration = etree.SubElement(vm, 'xen-configuration')
+
+	        hd_setup_type = etree.SubElement(xen_configuration, 'hd-setup-type')  # from ui
+		hd_setup_type.text = embedding.virt_vertices[node_id]['hd_setup_type']
+
+	        hd_origin_path = etree.SubElement(xen_configuration, 'hd-origin-path')  # from ui
+		hd_origin_path.text = embedding.virt_vertices[node_id]['hd_origin_path']
+
+	        virtualization_setup_type = etree.SubElement(xen_configuration, 'virtualization-setup-type')  # from ui
+		virtualization_setup_type.text = embedding.virt_vertices[node_id]['virtualization_setup_type']
+
+	        memory_mb = etree.SubElement(xen_configuration, 'memory-mb')  # from ui
+		memory_mb.text = str(embedding.virt_vertices[node_id]['memory_mb'])
+
+	        interfaces = etree.SubElement(xen_configuration, 'interfaces')
+
+	        interface = etree.SubElement(interfaces, 'interface', ismgmt="true")
+
+	        name = etree.SubElement(interface, 'name')
+		name.text = "NONE"
+
+	        mac = etree.SubElement(interface, 'mac')
+		mac.text = "NONE"
+
+	        ip = etree.SubElement(interface, 'ip')
+		ip.text = "NONE"
+
+	        gw = etree.SubElement(interface, 'gw')
+		gw.text = "NONE"
+
+	        dns1 = etree.SubElement(interface, 'dns1')
+		dns1.text = "NONE"
+
+	        dns2 = etree.SubElement(interface, 'dns2')
+		dns2.text = "NONE"
+
+	        switch_id = etree.SubElement(interface, 'switch-id')
+		switch_id.text = "NONE"
+
+	return doc
+
+    def provision(self, slice_urn, embedding):
+        
+	doc = self.provision_foam(embedding)
+	docVTAM = self.provision_vtam(embedding)
+
+	print tostring(docVTAM, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+
+	raise Exception, "wait on!!!!"
+
+	# send request to foam
         import os
         local_path = "/root/.gcf"
         key_path = os.path.join(local_path, "alice-key.pem") 
@@ -431,8 +481,35 @@ class VTPlannerResourceManager(object):
         client = GENI2Client('127.0.0.1', 3626, key_path, cert_path)
 
         # make request
-	print CREDS_CREATE % slice_urn
-        print client.createSliver(slice_urn, [ CREDS_CREATE % slice_urn ], tostring(doc))
+        output = client.createSliver(slice_urn, [ self.get_creds(embedding.slice_name) ], tostring(doc))
+
+	if output['code']['geni_code'] != 0:
+		raise Exception, "Unable to create sliver GENI error code %u (%s)" % (output['code']['geni_code'], output['output'])
+
+	# set sliver as provisioned
+        provisioned = db_session.query(VTPlannerEmbedding).filter(VTPlannerEmbedding.slice_name == embedding.slice_name).first()
+	provisioned.provisioned = True
+
+	return embedding
+
+    def get_creds(self, slice_name):
+
+	os.chdir("/root/gcf/")
+	p = subprocess.Popen(['src/omni.py', 'getslicecred', slice_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+	retval = p.wait()
+
+	if retval != 0:
+		raise Exception, "Unable to create sliver bash error code %u" % retval
+
+	creds = ""
+	for line in p.stderr.readlines():
+		creds = creds + line
+
+	start = creds.find('<?xml version="1.0"?>')
+	end = creds.find('</signed-credential>') + 20
+
+	return creds[start:end]
 
     def reserve_embedding(self, rspec, slice_name, owner_uuid, owner_email=None, end_time=None):
 
@@ -505,10 +582,31 @@ class VTPlannerResourceManager(object):
         db_session.expunge_all() # detach the objects from the database session, so the user can not directly change the database
         return embeddings
 
-    def free_embedding(self, embedding):
+    def free_embedding(self, slice_urn, embedding):
+
+	# delete sliver from local db
         embedding = db_session.query(VTPlannerEmbedding).filter(VTPlannerEmbedding.slice_name == embedding.slice_name).first()
         db_session.delete(embedding)
         db_session.commit()
+
+	if not embedding.provisioned:
+		return None
+
+	# send request to foam
+        import os
+        local_path = "/root/.gcf"
+        key_path = os.path.join(local_path, "alice-key.pem") 
+        cert_path = os.path.join(local_path, "alice-cert.pem")
+    
+        # instanciate the clientListResourcesAndNodes
+        client = GENI2Client('127.0.0.1', 3626, key_path, cert_path)
+
+        # make request
+        output = client.deleteSliver(slice_urn, [ self.get_creds(embedding.slice_name) ])
+
+	if output['code']['geni_code'] != 0:
+		raise Exception, "Unable to delete sliver GENI error code %u (%s)" % (output['code']['geni_code'], output['output'])
+
         return None
 
     @worker.outsideprocess

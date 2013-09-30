@@ -143,7 +143,7 @@ class VTPlannerGENI3Delegate(GENIv3DelegateBase):
                 client_urn, client_uuid, client_email = self.auth(client_cert, credentials, urn, ('deletesliver',)) # authenticate for each given slice
                 slice_embeddings = self._resource_manager.embeddings_in_slice(urn)
                 for embedding in slice_embeddings:
-                    self._resource_manager.free_embedding(embedding)
+                    self._resource_manager.free_embedding(urn, embedding)
             else:
                 raise geni_ex.GENIv3OperationUnsupportedError('Only slice URNs can be deleted in this aggregate')
         
@@ -169,10 +169,15 @@ class VTPlannerGENI3Delegate(GENIv3DelegateBase):
             result = {'geni_sliver_urn' : embedding.virt_vertices[vertex]['component_id'],#"%s:%s" % (embedding.virt_vertices[vertex]['type'], vertex),
                       'geni_expires'    : embedding.end_time,
                       'geni_allocation_status' : self.ALLOCATION_STATE_ALLOCATED}
+
             if embedding.provisioned:
                 result['geni_allocation_status'] = self.ALLOCATION_STATE_PROVISIONED
-            if (include_operational_status): # there is no state to an ip, so we always return ready
+
+            # this should check if (i) sliver was authorized on foam and (ii) if VM
+            # is actually running
+            if (include_operational_status): 
                 result['geni_operational_status'] = self.OPERATIONAL_STATE_READY
+
             if (error_message):
                 result['geni_error'] = error_message
         
@@ -215,7 +220,7 @@ class VTPlannerGENI3Delegate(GENIv3DelegateBase):
             srcDPID = embedding.virt_vertices.values()[link['src']]['dpid']
             dstDPID = embedding.virt_vertices.values()[link['dst']]['dpid']
 
-            edge = etree.SubElement(edges, '{%s}edge' % NSMAP['openflow'], nsmap=NSMAP, srcDPID=srcDPID, dstDPID=dstDPID)
+            edge = etree.SubElement(edges, '{%s}edge' % NSMAP['openflow'], nsmap=NSMAP, srcDPID=srcDPID, dstDPID=dstDPID, bw=str(link['capacity']))
             hops = etree.SubElement(edge, '{%s}hops' % NSMAP['openflow'], nsmap=NSMAP)
             idx = 1
             for hop in link['hops']: 
@@ -232,7 +237,29 @@ class VTPlannerGENI3Delegate(GENIv3DelegateBase):
 
         # add switches
         for node in embedding.virt_vertices.values():
-            nd = etree.SubElement(vertices, '{%s}vertex' % NSMAP['openflow'], nsmap=NSMAP, component_id=node['component_id'], component_manager_id=node['component_manager_id'], dpid=node['dpid'])
+
+            if node['type'] == "switch":
+
+                nd = etree.SubElement(vertices, '{%s}vertex' % NSMAP['openflow'], 
+                                      nsmap=NSMAP, 
+                                      type=node['type'], 
+                                      name=node['name'], 
+                                      tablesize=node['tablesize'], 
+                                      switchtype=node['switchtype'], 
+                                      component_id=node['component_id'], 
+                                      component_manager_id=node['component_manager_id'], 
+                                      dpid=node['dpid'])
+
+            else:
+
+                nd = etree.SubElement(vertices, '{%s}vertex' % NSMAP['openflow'], 
+                                      nsmap=NSMAP, 
+                                      type=node['type'], 
+                                      name=node['name'], 
+                                      memory_mb=str(node['memory_mb']), 
+                                      component_id=node['component_id'], 
+                                      component_manager_id=node['component_manager_id'], 
+                                      dpid=node['dpid'])
 
             for port in ports[node['dpid']]:
                 etree.SubElement(nd, '{%s}port' % NSMAP['openflow'], nsmap=NSMAP, num=str(port))
