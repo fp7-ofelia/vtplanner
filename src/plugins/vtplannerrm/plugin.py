@@ -10,10 +10,16 @@ def setup():
     # edit this if needed
     config.install("vtplannerrm.foam_host", '127.0.0.1', "FOAM IPAddress.")
     config.install("vtplannerrm.foam_port", 3626, "FOAM Port.")
-    config.install("vtplannerrm.vtam_host", '172.16.0.124', "VTAM IPAddress.")
+
+    config.install("vtplannerrm.vtam_host", '10.216.32.5', "VTAM IPAddress.")
     config.install("vtplannerrm.vtam_port", 8445, "VTAM Port.")
     config.install("vtplannerrm.vtam_username", 'openflow', "VTAM Username.")
-    config.install("vtplannerrm.vtam_password", 'openflow', "VTAM Password.")
+    config.install("vtplannerrm.vtam_password", 'p3rv4s1v3', "VTAM Password.")
+
+    config.install("vtplannerrm.vtam2_host", 'exp.i2cat.fp7-ofelia.eu', "VTAM IPAddress.")
+    config.install("vtplannerrm.vtam2_port", 8445, "VTAM Port.")
+    config.install("vtplannerrm.vtam2_username", 'xmlrpc_i2cat_user', "VTAM Username.")
+    config.install("vtplannerrm.vtam2_password", 'xmlrpc_407343_i2cat', "VTAM Password.")
 
     from vtplannerresourcemanager import VTPlannerResourceManager
     import vtplannerexceptions as exceptions_package
@@ -21,3 +27,4 @@ def setup():
     pm.registerService('vtplannerresourcemanager', rm)
     pm.registerService('vtplannerexceptions', exceptions_package)
     
+

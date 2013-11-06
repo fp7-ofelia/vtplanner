@@ -22,7 +22,7 @@ OUTPUT = "/tmp/vtplanner_output.mat"
 
 def run_process(exe):   
 
-    os.chdir('/root/AMsoil/src/plugins/vtplannerrm/')
+    os.chdir('/root/vtplanner/src/plugins/vtplannerrm/')
 
     current_env = os.environ.copy()
     current_env["LC_ALL"] = "C"

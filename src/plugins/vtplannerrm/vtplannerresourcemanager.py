@@ -163,9 +163,7 @@ class VTPlannerResourceManager(object):
 
         return ( virt_vertices, virt_edges, controller, email, description, packets )
 
-    def import_substrate(self, resources, vtam_resources):
-
-        vtam_doc = etree.fromstring(vtam_resources)
+    def import_substrate(self, resources, vtam_nodes):
 
         doc = etree.fromstring(resources)
 
@@ -215,7 +213,7 @@ class VTPlannerResourceManager(object):
             raise Exception("Unable to load links")
 
         # list substrate vm servers - links
-        for node in vtam_doc.findall('.//node'):
+        for node in vtam_nodes:
 
             component_manager_id = node.get("component_manager_id")
             component_id = node.get("component_id")
@@ -286,48 +284,64 @@ class VTPlannerResourceManager(object):
         # add links
         for link in embedding.virt_edges.values():
 
-            start_id = 0
-            end_id = None
-
-            if embedding.virt_vertices[link['src']]['type'] == 'vm':
-                end_id = None
-
-            if embedding.virt_vertices[link['dst']]['type'] == 'vm':
-                start_id = 1
-
             vlink = etree.SubElement(sliver, '{%s}vlink' % NSMAP['openflow'], nsmap=NSMAP)
             etree.SubElement(vlink, '{%s}use-group' % NSMAP['openflow'], nsmap=NSMAP, name="mygrp")
             hops = etree.SubElement(vlink, '{%s}hops' % NSMAP['openflow'], nsmap=NSMAP)
             idx = 1
-            for hop in link['hops'][start_id:end_id]: 
+
+            if embedding.virt_vertices[link['src']]['type'] == 'vm':
+                hopsSelected = link['hops'][:-1] 
+            elif embedding.virt_vertices[link['dst']]['type'] == 'vm':
+                hopsSelected = link['hops'][1:]
+            else:
+                hopsSelected = link['hops'][:]
+
+            for hop in hopsSelected: 
                 if hop[0] not in ports:
-                    ports[hop[0]] = []
+                    ports[hop[0]] = set()
                 if hop[2] not in ports:
-                    ports[hop[2]] = []
+                    ports[hop[2]] = set()
                 if hop[1] not in ports[hop[0]]:
-                    ports[hop[0]].append(hop[1])
+                    ports[hop[0]].add(hop[1])
                 if hop[3] not in ports[hop[2]]:
-                    ports[hop[2]].append(hop[3])
+                    ports[hop[2]].add(hop[3])
                 lnk = "%s/%s-%s/%s" % tuple(hop)
                 etree.SubElement(hops, '{%s}hop' % NSMAP['openflow'], nsmap=NSMAP, index=str(idx), link=lnk)
                 idx = idx + 1
 
+
+	# load substrate nodes and links
+        import os
+        local_path = "/root/.gcf"
+        key_path = os.path.join(local_path, "alice-key.pem") 
+        cert_path = os.path.join(local_path, "alice-cert.pem")
+    
+        # instanciate the client
+        client = GENI2Client(self.config.get("vtplannerrm.foam_host"), self.config.get("vtplannerrm.foam_port"), key_path, cert_path)
+
+        # make request to foam
+        resources = client.listResources([CREDS], None, True, False)
+
+        docFoam = etree.fromstring(resources['value'])
+
+        # list substrate devices
+        sub_devices = {}
+        for item in docFoam.findall('.//{%s}datapath' % docFoam.nsmap['openflow']):
+            sub_devices[item.get('dpid')] = { 'dpid' : item.get('dpid'), 
+                                              'component_id' : item.get('component_id'),
+                                              'component_manager_id' : item.get('component_manager_id') }
         # add switches
-        for node_id in embedding.virt_vertices:
- 
-            node = embedding.virt_vertices[node_id]
+	for node in ports:
 
-            if node['type'] == 'switch':
+            nd = etree.SubElement(mygrp, 
+                                  '{%s}datapath' % NSMAP['openflow'], 
+                                  nsmap=NSMAP, 
+                                  component_id=sub_devices[node]['component_id'], 
+                                  component_manager_id=sub_devices[node]['component_manager_id'], 
+                                  dpid=node)
 
-                nd = etree.SubElement(mygrp, 
-                                      '{%s}datapath' % NSMAP['openflow'], 
-                                      nsmap=NSMAP, 
-                                      component_id=node['component_id'], 
-                                      component_manager_id=node['component_manager_id'], 
-                                      dpid=node['dpid'])
-
-                for port in ports[node['dpid']]:
-                    etree.SubElement(nd, '{%s}port' % NSMAP['openflow'], nsmap=NSMAP, num=str(port))
+            for port in ports[node]:
+                etree.SubElement(nd, '{%s}port' % NSMAP['openflow'], nsmap=NSMAP, num=str(port))
 
         # flowspace zone
         match = etree.SubElement(sliver, '{%s}match' % NSMAP['openflow'], nsmap=NSMAP)
@@ -463,15 +477,11 @@ class VTPlannerResourceManager(object):
 	return doc
 
     def provision(self, slice_urn, embedding):
-        
+
+	# generate document for foam
 	doc = self.provision_foam(embedding)
-	docVTAM = self.provision_vtam(embedding)
 
-	print tostring(docVTAM, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-
-	raise Exception, "wait on!!!!"
-
-	# send request to foam
+	# prepare request for foams
         import os
         local_path = "/root/.gcf"
         key_path = os.path.join(local_path, "alice-key.pem") 
@@ -487,10 +497,11 @@ class VTPlannerResourceManager(object):
 		raise Exception, "Unable to create sliver GENI error code %u (%s)" % (output['code']['geni_code'], output['output'])
 
 	# set sliver as provisioned
-        provisioned = db_session.query(VTPlannerEmbedding).filter(VTPlannerEmbedding.slice_name == embedding.slice_name).first()
-	provisioned.provisioned = True
+        reserved = db_session.query(VTPlannerEmbedding).filter(VTPlannerEmbedding.slice_name == embedding.slice_name).first()
+	reserved.provisioned = True
+	db_session.commit()
 
-	return embedding
+	return reserved
 
     def get_creds(self, slice_name):
 
@@ -532,21 +543,34 @@ class VTPlannerResourceManager(object):
         # make request to foam
         resources = client.listResources([CREDS], None, True, False)
 
-        # make request to vt-am
+	# list of vtam ndoes
+	vtam_nodes = []
+
+        # make request to vt-am (CN)
+
         creds = (self.config.get("vtplannerrm.vtam_username"),
                  self.config.get("vtplannerrm.vtam_password"),
                  self.config.get("vtplannerrm.vtam_host"), 
                  self.config.get("vtplannerrm.vtam_port"))
 
-        #import xmlrpclib
-        #s = xmlrpclib.Server("https://openflow:openflow@172.16.0.124:8445/xmlrpc/plugin", verbose=True)
-        #s.listResources("remoteHashValue","projectUUID","sliceUUID")
-        #s.listResourcesAndNodes()
-
         s = xmlrpclib.Server("https://%s:%s@%s:%s/xmlrpc/plugin" % creds)
         vtam_resources = s.ListResourcesAndNodes()
+        vtam_doc = etree.fromstring(vtam_resources)
+        for node in vtam_doc.findall('.//node'):
+		vtam_nodes.append(node)
 
-	( sub_devices, sub_links ) = self.import_substrate(resources['value'], vtam_resources)
+        creds = (self.config.get("vtplannerrm.vtam2_username"),
+                 self.config.get("vtplannerrm.vtam2_password"),
+                 self.config.get("vtplannerrm.vtam2_host"), 
+                 self.config.get("vtplannerrm.vtam2_port"))
+
+        s = xmlrpclib.Server("https://%s:%s@%s:%s/xmlrpc/plugin" % creds)
+        vtam2_resources = s.ListResourcesAndNodes()
+        vtam2_doc = etree.fromstring(vtam2_resources)
+        for node in vtam2_doc.findall('.//node'):
+		vtam_nodes.append(node)
+
+	( sub_devices, sub_links ) = self.import_substrate(resources['value'], vtam_nodes)
 
         # compute embedding
         params = { 'mcr' : pm.getService('config').get('vtplannerrm.mcr'), 'alpha' : 0.5 }

@@ -2,6 +2,7 @@
 import amsoil.core.pluginmanager as pm
 import amsoil.core.log
 import re
+import xmlrpclib
 
 from lxml import etree
 from lxml.builder import E
@@ -16,6 +17,8 @@ vtplanner_ex = pm.getService('vtplannerexceptions')
 class VTPlannerGENI3Delegate(GENIv3DelegateBase):
     """
     """
+
+    config = pm.getService("config")
 
     def __init__(self):
         super(VTPlannerGENI3Delegate, self).__init__()
@@ -97,8 +100,8 @@ class VTPlannerGENI3Delegate(GENIv3DelegateBase):
                     except vtplanner_ex.VTPlannerDurationExceeded as e:
                         raise geni_ex.GENIv3BadArgsError("Embedding can not be extended that long (%s)" % (str(e),))
                     # really instanciate the resources
-                    self._resource_manager.provision(urn, embedding)
-                provisioned_embeddings.extend(embeddings)
+                    res = self._resource_manager.provision(urn, embedding)
+                    provisioned_embeddings.append(res)
             else:
                 raise geni_ex.GENIv3OperationUnsupportedError('Only slice URNs can be provisioned by this aggregate')
         
@@ -220,10 +223,23 @@ class VTPlannerGENI3Delegate(GENIv3DelegateBase):
             srcDPID = embedding.virt_vertices.values()[link['src']]['dpid']
             dstDPID = embedding.virt_vertices.values()[link['dst']]['dpid']
 
+            srcType = embedding.virt_vertices.values()[link['src']]['type']
+            dstType = embedding.virt_vertices.values()[link['dst']]['type']
+
             edge = etree.SubElement(edges, '{%s}edge' % NSMAP['openflow'], nsmap=NSMAP, srcDPID=srcDPID, dstDPID=dstDPID, bw=str(link['capacity']))
             hops = etree.SubElement(edge, '{%s}hops' % NSMAP['openflow'], nsmap=NSMAP)
+
             idx = 1
-            for hop in link['hops']: 
+
+            if srcType == 'vm':
+                hopsSelected = link['hops'][:-1] 
+            elif dstType == 'vm':
+                hopsSelected = link['hops'][1:]
+            else:
+                hopsSelected = link['hops'][:]
+
+            for hop in hopsSelected: 
+
                 if hop[0] not in ports:
                     ports[hop[0]] = []
                 if hop[2] not in ports:
@@ -232,8 +248,37 @@ class VTPlannerGENI3Delegate(GENIv3DelegateBase):
                     ports[hop[0]].append(hop[1])
                 if hop[3] not in ports[hop[2]]:
                     ports[hop[2]].append(hop[3])
+
                 etree.SubElement(hops, '{%s}hop' % NSMAP['openflow'], nsmap=NSMAP, srcDPID=hop[0], srcPort=str(hop[1]), dstDPID=hop[2], dstPort=str(hop[3]))
                 idx = idx + 1
+
+
+	# list of vtam servers
+	vtam_servers = []
+
+	# make request to vt-am (CN)
+	creds = (self.config.get("vtplannerrm.vtam_username"),
+	         self.config.get("vtplannerrm.vtam_password"),
+	         self.config.get("vtplannerrm.vtam_host"), 
+	         self.config.get("vtplannerrm.vtam_port"))
+
+	s = xmlrpclib.Server("https://%s:%s@%s:%s/xmlrpc/plugin" % creds)
+	vtam_resources = s.listResources("")
+	vtam_doc = etree.fromstring(vtam_resources[1])
+	for server in vtam_doc.findall('.//server'):
+		vtam_servers.append(server)
+
+	# make request to vt-am (i2Cat)
+	creds = (self.config.get("vtplannerrm.vtam2_username"),
+	         self.config.get("vtplannerrm.vtam2_password"),
+	         self.config.get("vtplannerrm.vtam2_host"), 
+	         self.config.get("vtplannerrm.vtam2_port"))
+
+	s = xmlrpclib.Server("https://%s:%s@%s:%s/xmlrpc/plugin" % creds)
+	vtam2_resources = s.listResources("")
+	vtam2_doc = etree.fromstring(vtam2_resources[1])
+	for server in vtam2_doc.findall('.//server'):
+		vtam_servers.append(server)
 
         # add switches
         for node in embedding.virt_vertices.values():
@@ -252,17 +297,30 @@ class VTPlannerGENI3Delegate(GENIv3DelegateBase):
 
             else:
 
+		server_uuid = None
+
+		for server in vtam_servers:
+
+			name = server.findall('.//name')[0]
+			uuid = server.findall('.//uuid')[0]
+
+			if name.text == node['component_id'].split('+')[-1]:
+				server_uuid = uuid.text
+				break
+
                 nd = etree.SubElement(vertices, '{%s}vertex' % NSMAP['openflow'], 
                                       nsmap=NSMAP, 
                                       type=node['type'], 
                                       name=node['name'], 
                                       memory_mb=str(node['memory_mb']), 
                                       component_id=node['component_id'], 
-                                      component_manager_id=node['component_manager_id'], 
+                                      component_manager_id=node['component_manager_id'],
+                                      server_uuid=server_uuid,
                                       dpid=node['dpid'])
 
-            for port in ports[node['dpid']]:
-                etree.SubElement(nd, '{%s}port' % NSMAP['openflow'], nsmap=NSMAP, num=str(port))
+            if node['dpid'] in ports:
+                for port in ports[node['dpid']]:
+                    etree.SubElement(nd, '{%s}port' % NSMAP['openflow'], nsmap=NSMAP, num=str(port))
 
         return doc
 
